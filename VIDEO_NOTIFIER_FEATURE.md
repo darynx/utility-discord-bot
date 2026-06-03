@@ -170,6 +170,54 @@ For YouTube, `id` is the **channel ID** (starts with `UC`). For TikTok, `id` is 
 
 You can add/remove channels at runtime using the slash commands instead of editing `config.json` directly.
 
+### Important: Both RSS and API Use Channel ID
+
+YouTube requires a **Channel ID** (not a username/handle) whether you use RSS feeds or the YouTube Data API. Both systems use the same identifier format.
+
+**Username vs Channel ID — What's the difference?**
+
+| Example | Format | Works? |
+|---------|--------|--------|
+| `@MrBeast` | Username / Handle | ❌ Not accepted |
+| `UCXgGY0wkgOzynnHvSEVmE3A` | Channel ID (starts with `UC`) | ✅ Works for both RSS and API |
+
+> **Rule of thumb:** If it starts with `UC` and is 24 characters long, it's a Channel ID. If it starts with `@`, it's a username and won't work.
+
+**How to find a YouTube Channel ID**
+
+Use any of these methods:
+
+1. **Look in the URL bar** — Navigate to the channel's page on YouTube. The URL contains the Channel ID:
+   - `https://www.youtube.com/channel/UCXgGY0wkgOzynnHvSEVmE3A` — the ID is right there
+   - If the URL shows a custom handle like `https://www.youtube.com/@MrBeast`, right-click the page and select **"View Page Source"**, then search for `"channelId"` — you'll find it in the page metadata
+
+2. **Use a lookup tool** — Several free websites convert a username/handle to a Channel ID:
+   - [Comment Picker](https://commentpicker.com/youtube-channel-id.php) — Enter a channel URL or handle to get the Channel ID
+   - [Streams Charts](https://streamscharts.com/tools/youtube-channel-id) — Another reliable lookup tool
+   - [LiveCounts](https://livecounts.io/youtube-channel-id-finder) — Simple and fast
+
+3. **Use the YouTube Data API directly** (if you already have an API key):
+   ```
+   https://www.googleapis.com/youtube/v3/channels?part=id&forHandle=@MrBeast&key=YOUR_API_KEY
+   ```
+   The response will include the `id` field with the Channel ID.
+
+**Examples in config.json:**
+
+```json
+{
+  "id": "UCXgGY0wkgOzynnHvSEVmE3A",   // ✅ Correct — Channel ID
+  "label": "MrBeast"
+}
+```
+
+```json
+{
+  "id": "@MrBeast",                   // ❌ Wrong — username, will fail
+  "label": "MrBeast"
+}
+```
+
 ---
 
 ## Usage Examples
