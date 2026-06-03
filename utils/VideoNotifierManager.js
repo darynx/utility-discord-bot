@@ -4,6 +4,8 @@ import Parser from 'rss-parser';
 import { saveConfig, getDefaultThumbnail, getMessageStyle } from './ConfigLoader.js';
 import { ComponentBuilder } from './ComponentBuilder.js';
 import { YouTubeHelper } from './YouTubeHelper.js';
+import { existsSync, readFileSync, writeFileSync } from 'fs';
+import { dirname, join } from 'path';
 
 export class VideoNotifierManager {
   constructor(client, config, configPath = null) {
@@ -25,6 +27,8 @@ export class VideoNotifierManager {
     this.lastCommunityPosts = new Map();
     this.pollingInterval = null;
     this.youtubeHelper = new YouTubeHelper();
+    this.statePath = configPath ? join(dirname(configPath), 'videoNotifierState.json') : null;
+    this.loadState();
   }
 
   start() {
@@ -47,6 +51,42 @@ export class VideoNotifierManager {
       clearInterval(this.pollingInterval);
       this.pollingInterval = null;
       this.logger.info('Stopped video notifier');
+    }
+  }
+
+  loadState() {
+    if (!this.statePath) return;
+    try {
+      if (!existsSync(this.statePath)) {
+        this.logger.debug('No state file found, starting fresh');
+        return;
+      }
+      const raw = readFileSync(this.statePath, 'utf-8');
+      const data = JSON.parse(raw);
+      if (data.lastVideos && typeof data.lastVideos === 'object') {
+        this.lastVideos = new Map(Object.entries(data.lastVideos));
+      }
+      if (data.lastCommunityPosts && typeof data.lastCommunityPosts === 'object') {
+        this.lastCommunityPosts = new Map(Object.entries(data.lastCommunityPosts));
+      }
+      this.logger.info(`Loaded state: ${this.lastVideos.size} videos, ${this.lastCommunityPosts.size} community posts`);
+    } catch (error) {
+      this.logger.warn(`Failed to load state file, starting fresh: ${error.message}`);
+      this.lastVideos = new Map();
+      this.lastCommunityPosts = new Map();
+    }
+  }
+
+  saveState() {
+    if (!this.statePath) return;
+    try {
+      const data = {
+        lastVideos: Object.fromEntries(this.lastVideos),
+        lastCommunityPosts: Object.fromEntries(this.lastCommunityPosts)
+      };
+      writeFileSync(this.statePath, JSON.stringify(data, null, 2), 'utf-8');
+    } catch (error) {
+      this.logger.error(`Failed to save state: ${error.message}`);
     }
   }
 
@@ -106,6 +146,7 @@ export class VideoNotifierManager {
           }
           
           this.lastCommunityPosts.set(`youtube:community:${channelId}`, postId);
+          this.saveState();
         }
       }
     } catch (error) {
@@ -134,6 +175,7 @@ export class VideoNotifierManager {
             this.logger.info(`New video detected from ${channelName}: ${latestVideo.title}`);
             await this.sendVideoNotification(latestVideo, 'youtube', channelName);
             this.lastVideos.set(`youtube:${channelId}`, videoId);
+            this.saveState();
           } else {
             this.logger.debug(`No new videos from ${channelName}`);
           }
@@ -197,6 +239,7 @@ export class VideoNotifierManager {
         
         await this.sendVideoNotification(video, 'youtube', channelName);
         this.lastVideos.set(`youtube:${channelId}`, videoId);
+        this.saveState();
       }
     }
   }
@@ -228,6 +271,7 @@ export class VideoNotifierManager {
           
           await this.sendCommunityPostNotification(communityPost, channelName);
           this.lastCommunityPosts.set(`youtube:community:${channelId}`, postId);
+          this.saveState();
         }
       }
     }
@@ -303,6 +347,7 @@ export class VideoNotifierManager {
               this.logger.info(`New TikTok detected from ${channelName}: ${latestVideo.title}`);
               await this.sendVideoNotification(latestVideo, 'tiktok', channelName);
               this.lastVideos.set(`tiktok:${username}`, videoId);
+              this.saveState();
             } else {
               this.logger.debug(`No new TikToks from ${channelName}`);
             }
@@ -845,6 +890,9 @@ export class VideoNotifierManager {
     }
     
     this.config.videoNotifier.youtube.channels.splice(index, 1);
+    this.lastVideos.delete(`youtube:${channelId}`);
+    this.lastCommunityPosts.delete(`youtube:community:${channelId}`);
+    this.saveState();
     await this.persistConfig();
     return { success: true, message: 'YouTube channel removed and config saved' };
   }
@@ -881,6 +929,8 @@ export class VideoNotifierManager {
     }
     
     this.config.videoNotifier.tiktok.channels.splice(index, 1);
+    this.lastVideos.delete(`tiktok:${username}`);
+    this.saveState();
     await this.persistConfig();
     return { success: true, message: 'TikTok channel removed and config saved' };
   }
@@ -908,6 +958,87 @@ export class VideoNotifierManager {
     return { success: true, message: 'Config updated and saved' };
   }
 
+  async fetchLatestYouTubeVideo(channelIdentifier) {
+    // channelIdentifier can be a channel ID (UCxxx) or a channel config object
+    let channelId;
+    let label = 'Fetched Channel';
+    let apiKey = this.config.videoNotifier?.youtube?.youtubeApiKey;
+
+    if (typeof channelIdentifier === 'object' && channelIdentifier.channelId) {
+      channelId = channelIdentifier.channelId;
+      label = channelIdentifier.label || label;
+    } else if (typeof channelIdentifier === 'string') {
+      channelId = channelIdentifier;
+    } else {
+      throw new Error('Invalid channel identifier');
+    }
+
+    // Try API first if key is available
+    if (apiKey) {
+      try {
+        const uploadsPlaylistId = 'UU' + channelId.substring(2);
+        const url = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=${uploadsPlaylistId}&maxResults=1&key=${apiKey}`;
+        const response = await fetch(url);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.items && data.items.length > 0) {
+            const item = data.items[0];
+            const videoId = item.snippet.resourceId.videoId;
+            return {
+              title: item.snippet.title,
+              link: `https://www.youtube.com/watch?v=${videoId}`,
+              pubDate: item.snippet.publishedAt,
+              contentSnippet: item.snippet.description,
+              videoId,
+              channelName: item.snippet.channelTitle || label
+            };
+          }
+        }
+      } catch {
+        // Fall through to RSS
+      }
+    }
+
+    // Fallback: RSS
+    const rssUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`;
+    const feed = await this.parser.parseURL(rssUrl);
+    if (!feed.items || feed.items.length === 0) {
+      throw new Error('No videos found for this channel');
+    }
+    const latestVideo = feed.items[0];
+    const videoId = this.extractYouTubeVideoId(latestVideo.link);
+    if (!videoId) {
+      throw new Error('Could not extract video ID from RSS feed');
+    }
+    return {
+      title: latestVideo.title,
+      link: latestVideo.link,
+      pubDate: latestVideo.pubDate,
+      contentSnippet: latestVideo.contentSnippet,
+      videoId,
+      channelName: feed.title || label
+    };
+  }
+
+  async fetchLatestTikTokVideo(username) {
+    const rssUrl = `https://www.tiktok.com/@${username}/rss`;
+    const feed = await this.parser.parseURL(rssUrl);
+    if (!feed.items || feed.items.length === 0) {
+      throw new Error('No videos found for this TikTok user');
+    }
+    const latestVideo = feed.items[0];
+    const videoId = this.extractTikTokVideoId(latestVideo.guid);
+    return {
+      title: latestVideo.title,
+      link: latestVideo.link,
+      pubDate: latestVideo.pubDate,
+      contentSnippet: latestVideo.contentSnippet,
+      guid: latestVideo.guid,
+      videoId,
+      channelName: feed.title || username
+    };
+  }
+
   async sendTestYouTubeNotification(channelId, videoData = null) {
     const testVideo = videoData || {
       title: 'Test YouTube Video',
@@ -929,14 +1060,15 @@ export class VideoNotifierManager {
     }
 
     const style = getMessageStyle(this.config, 'videoNotifier');
+    const channelLabel = videoData?.channelName || 'Test Channel';
     if (style === 'v2') {
-      const v2Message = this.createV2Message(testVideo, 'youtube', 'Test Channel');
+      const v2Message = this.createV2Message(testVideo, 'youtube', channelLabel);
       await channel.send({ content: '🔔 **Test YouTube Notification**', ...v2Message });
     } else if (style === 'simple') {
-      const message = this.createSimpleMessage(testVideo, 'youtube', 'Test Channel');
+      const message = this.createSimpleMessage(testVideo, 'youtube', channelLabel);
       await channel.send({ content: `🔔 **Test YouTube Notification**\n\n${message}` });
     } else {
-      const embed = this.createEmbed(testVideo, 'youtube', 'Test Channel');
+      const embed = this.createEmbed(testVideo, 'youtube', channelLabel);
       await channel.send({ content: '🔔 **Test YouTube Notification**', embeds: [embed] });
     }
   }
@@ -962,14 +1094,15 @@ export class VideoNotifierManager {
     }
 
     const style = getMessageStyle(this.config, 'videoNotifier');
+    const channelLabel = videoData?.channelName || 'Test User';
     if (style === 'v2') {
-      const v2Message = this.createV2Message(testVideo, 'tiktok', 'Test User');
+      const v2Message = this.createV2Message(testVideo, 'tiktok', channelLabel);
       await channel.send({ content: '🔔 **Test TikTok Notification**', ...v2Message });
     } else if (style === 'simple') {
-      const message = this.createSimpleMessage(testVideo, 'tiktok', 'Test User');
+      const message = this.createSimpleMessage(testVideo, 'tiktok', channelLabel);
       await channel.send({ content: `🔔 **Test TikTok Notification**\n\n${message}` });
     } else {
-      const embed = this.createEmbed(testVideo, 'tiktok', 'Test User');
+      const embed = this.createEmbed(testVideo, 'tiktok', channelLabel);
       await channel.send({ content: '🔔 **Test TikTok Notification**', embeds: [embed] });
     }
   }

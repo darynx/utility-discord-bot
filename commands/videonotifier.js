@@ -94,11 +94,21 @@ export default {
     .addSubcommand(subcommand =>
       subcommand
         .setName('test-youtube')
-        .setDescription('Send a test YouTube notification'))
+        .setDescription('Send a test YouTube notification (fetches real latest video if channel-id is provided)')
+        .addStringOption(option =>
+          option
+            .setName('channel-id')
+            .setDescription('YouTube Channel ID to fetch the real latest video from')
+            .setRequired(false)))
     .addSubcommand(subcommand =>
       subcommand
         .setName('test-tiktok')
-        .setDescription('Send a test TikTok notification'))
+        .setDescription('Send a test TikTok notification (fetches real latest video if username is provided)')
+        .addStringOption(option =>
+          option
+            .setName('username')
+            .setDescription('TikTok username to fetch the real latest video from')
+            .setRequired(false)))
     .addSubcommand(subcommand =>
       subcommand
         .setName('set-style')
@@ -195,20 +205,96 @@ async function handleSetApiKey(interaction, manager) {
 async function handleTestYouTube(interaction, manager) {
   try {
     await interaction.deferReply({ ephemeral: true });
+
+    const channelIdOption = interaction.options.getString('channel-id');
+
+    if (channelIdOption) {
+      // Fetch real latest video from the specified channel
+      await interaction.editReply({ content: `🔍 Fetching latest YouTube video from channel \`${channelIdOption}\`...` });
+
+      let videoData;
+      if (manager.validateYouTubeChannelId(channelIdOption)) {
+        videoData = await manager.fetchLatestYouTubeVideo(channelIdOption);
+      } else {
+        // Maybe it's a @handle - try to look up
+        const lookupResult = await manager.lookupChannelId(channelIdOption);
+        if (!lookupResult.success) {
+          return interaction.editReply({ content: `❌ Could not resolve \`${channelIdOption}\` to a valid channel. ${lookupResult.message}` });
+        }
+        videoData = await manager.fetchLatestYouTubeVideo(lookupResult.channelId);
+      }
+
+      await manager.sendTestYouTubeNotification(null, videoData);
+      return interaction.editReply({
+        content: `✅ Test notification sent with real latest video from **${videoData.channelName}**: **[${videoData.title}](${videoData.link})**`
+      });
+    }
+
+    // Fallback: first configured channel if available
+    const youtubeChannels = manager.config.videoNotifier?.youtube?.channels || [];
+    if (youtubeChannels.length > 0) {
+      await interaction.editReply({ content: `🔍 Fetching latest YouTube video from first configured channel...` });
+      try {
+        const videoData = await manager.fetchLatestYouTubeVideo(youtubeChannels[0]);
+        await manager.sendTestYouTubeNotification(null, videoData);
+        return interaction.editReply({
+          content: `✅ Test notification sent with real latest video from **${videoData.channelName}**: **[${videoData.title}](${videoData.link})**`
+        });
+      } catch (fetchError) {
+        // If fetching from first channel fails, fall back to placeholder
+        await interaction.editReply({ content: `⚠️ Could not fetch from configured channel (${fetchError.message}). Sending placeholder test notification instead.` });
+        await manager.sendTestYouTubeNotification();
+        return interaction.editReply({ content: '✅ Test YouTube notification sent (with placeholder data)' });
+      }
+    }
+
+    // No channel specified and no configured channels - use placeholder
     await manager.sendTestYouTubeNotification();
-    await interaction.editReply('✅ Test YouTube notification sent!');
+    await interaction.editReply({ content: '✅ Test YouTube notification sent (with placeholder data). Use `channel-id` option to send a real video from a specific channel.' });
   } catch (error) {
-    await interaction.editReply(`❌ Error sending test notification: ${error.message}`);
+    await interaction.editReply({ content: `❌ Error sending test notification: ${error.message}` });
   }
 }
 
 async function handleTestTikTok(interaction, manager) {
   try {
     await interaction.deferReply({ ephemeral: true });
+
+    const usernameOption = interaction.options.getString('username');
+
+    if (usernameOption) {
+      const cleanUsername = usernameOption.startsWith('@') ? usernameOption.slice(1) : usernameOption;
+      await interaction.editReply({ content: `🔍 Fetching latest TikTok video from @${cleanUsername}...` });
+
+      const videoData = await manager.fetchLatestTikTokVideo(cleanUsername);
+      await manager.sendTestTikTokNotification(null, videoData);
+      return interaction.editReply({
+        content: `✅ Test notification sent with real latest video from **${videoData.channelName}**: **[${videoData.title}](${videoData.link})**`
+      });
+    }
+
+    // Fallback: first configured TikTok channel if available
+    const tiktokChannels = manager.config.videoNotifier?.tiktok?.channels || [];
+    if (tiktokChannels.length > 0) {
+      await interaction.editReply({ content: `🔍 Fetching latest TikTok video from first configured channel...` });
+      try {
+        const videoData = await manager.fetchLatestTikTokVideo(tiktokChannels[0].username);
+        await manager.sendTestTikTokNotification(null, videoData);
+        return interaction.editReply({
+          content: `✅ Test notification sent with real latest video from **${videoData.channelName}**: **[${videoData.title}](${videoData.link})**`
+        });
+      } catch (fetchError) {
+        await interaction.editReply({ content: `⚠️ Could not fetch from configured channel (${fetchError.message}). Sending placeholder test notification instead.` });
+        await manager.sendTestTikTokNotification();
+        return interaction.editReply({ content: '✅ Test TikTok notification sent (with placeholder data)' });
+      }
+    }
+
+    // No username specified and no configured channels - use placeholder
     await manager.sendTestTikTokNotification();
-    await interaction.editReply('✅ Test TikTok notification sent!');
+    await interaction.editReply({ content: '✅ Test TikTok notification sent (with placeholder data). Use `username` option to send a real video from a specific channel.' });
   } catch (error) {
-    await interaction.editReply(`❌ Error sending test notification: ${error.message}`);
+    await interaction.editReply({ content: `❌ Error sending test notification: ${error.message}` });
   }
 }
 
