@@ -292,19 +292,34 @@ async function handleAddYouTube(interaction, manager) {
 
   await interaction.deferReply({ ephemeral: true });
 
-  // Handle @username format
+  // Handle @username format - auto-lookup
   if (channelId.startsWith('@')) {
+    await interaction.editReply({ content: `🔍 Looking up ${channelId}...` });
+
     const lookupResult = await manager.lookupChannelId(channelId);
-    if (lookupResult.success) {
-      channelId = lookupResult.channelId;
-    } else {
-      return interaction.editReply({
-        content: `❌ Could not resolve YouTube username ${channelId} to a Channel ID. ${lookupResult.message}`
-      });
+    if (!lookupResult.success) {
+      let message = `❌ Could not resolve YouTube username ${channelId} to a Channel ID. ${lookupResult.message}`;
+
+      // Suggest setting an API key if one isn't configured
+      const apiKey = manager.config.videoNotifier?.youtube?.youtubeApiKey;
+      if (!apiKey) {
+        message += '\n\n💡 **Tip:** Set a YouTube API key with `/videonotifier set-apikey` for more reliable and faster lookups.';
+      }
+
+      return interaction.editReply({ content: message });
     }
+
+    channelId = lookupResult.channelId;
+    await interaction.editReply({
+      content: `✅ Found! Channel ID: \`${channelId}\` (${lookupResult.channelName})`
+    });
   }
 
   // Step 1: Validate the channel first
+  await interaction.editReply({
+    content: `🔄 Validating channel (RSS${manager.config.videoNotifier?.youtube?.youtubeApiKey ? '/API' : ''})...`
+  });
+
   const validation = await manager.validateYouTubeChannel(channelId);
 
   if (!validation.success) {
