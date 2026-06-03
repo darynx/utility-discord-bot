@@ -58,11 +58,22 @@ export class YouTubeHelper {
           description = post.content.toString();
         }
 
-        // publishedAt should be a valid date string for the notification
-        // youtubei.js usually returns relative time like "2 hours ago"
-        // Since we can't easily get the exact date, we use the current date
-        // which is accurate enough for a "newly detected" post.
-        const publishedAt = new Date().toISOString();
+        // Try to extract the actual publishedAt timestamp from the post
+        // youtubei.js posts may have different timestamp formats
+        let publishedAt = new Date().toISOString(); // fallback
+
+        if (post.published) {
+          if (post.published instanceof Date) {
+            publishedAt = post.published.toISOString();
+          } else if (typeof post.published === 'number') {
+            publishedAt = new Date(post.published * 1000).toISOString();
+          }
+        }
+
+        // Check for timestamp property (unix timestamp in seconds)
+        if (post.timestamp && typeof post.timestamp === 'number') {
+          publishedAt = new Date(post.timestamp * 1000).toISOString();
+        }
 
         return {
           id: postId,
