@@ -26,3 +26,6 @@ Thumbs.db
 
 # Config (if contains sensitive data)
 config.json.local
+
+# Runtime state files
+videoNotifierState.json
