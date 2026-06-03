@@ -10,6 +10,15 @@ export default {
         .setDescription('List all monitored channels'))
     .addSubcommand(subcommand =>
       subcommand
+        .setName('lookup')
+        .setDescription('Look up a YouTube Channel ID from a username')
+        .addStringOption(option =>
+          option
+            .setName('username')
+            .setDescription('The YouTube username (with or without @)')
+            .setRequired(true)))
+    .addSubcommand(subcommand =>
+      subcommand
         .setName('add-youtube')
         .setDescription('Add a YouTube channel to monitor')
         .addStringOption(option =>
@@ -128,6 +137,8 @@ export default {
     switch (subcommand) {
       case 'list':
         return handleList(interaction, manager);
+      case 'lookup':
+        return handleLookupYouTube(interaction, manager);
       case 'add-youtube':
         return handleAddYouTube(interaction, manager);
       case 'add-youtube-force':
@@ -201,6 +212,39 @@ async function handleTestTikTok(interaction, manager) {
   }
 }
 
+async function handleLookupYouTube(interaction, manager) {
+  const username = interaction.options.getString('username');
+  await interaction.deferReply({ ephemeral: true });
+
+  const result = await manager.lookupChannelId(username);
+
+  if (result.success) {
+    const embed = {
+      color: manager.config.embedColors.success,
+      title: '🔍 YouTube Channel Lookup',
+      thumbnail: {
+        url: result.thumbnail || 'https://cdn-icons-png.flaticon.com/512/1384/1384060.png'
+      },
+      fields: [
+        { name: '👤 Username', value: username.startsWith('@') ? username : `@${username}`, inline: true },
+        { name: '📺 Channel Name', value: result.channelName, inline: true },
+        { name: '🆔 Channel ID', value: `\`${result.channelId}\``, inline: false },
+        { name: '💡 Tip', value: `You can now use this ID with \`/videonotifier add-youtube channel-id:${result.channelId}\``, inline: false }
+      ],
+      timestamp: new Date(),
+      footer: {
+        text: 'YouTube Lookup',
+        iconURL: 'https://www.youtube.com/favicon.ico'
+      }
+    };
+    await interaction.editReply({ embeds: [embed] });
+  } else {
+    await interaction.editReply({
+      content: `❌ ${result.message}`
+    });
+  }
+}
+
 async function handleList(interaction, manager) {
   const channels = manager.listChannels();
   
@@ -243,10 +287,22 @@ async function handleList(interaction, manager) {
 }
 
 async function handleAddYouTube(interaction, manager) {
-  const channelId = interaction.options.getString('channel-id');
+  let channelId = interaction.options.getString('channel-id');
   const label = interaction.options.getString('label');
 
   await interaction.deferReply({ ephemeral: true });
+
+  // Handle @username format
+  if (channelId.startsWith('@')) {
+    const lookupResult = await manager.lookupChannelId(channelId);
+    if (lookupResult.success) {
+      channelId = lookupResult.channelId;
+    } else {
+      return interaction.editReply({
+        content: `❌ Could not resolve YouTube username ${channelId} to a Channel ID. ${lookupResult.message}`
+      });
+    }
+  }
 
   // Step 1: Validate the channel first
   const validation = await manager.validateYouTubeChannel(channelId);

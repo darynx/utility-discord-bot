@@ -470,6 +470,73 @@ export class VideoNotifierManager {
     return guid;
   }
 
+  async lookupChannelId(username) {
+    const cleanUsername = username.startsWith('@') ? username : `@${username}`;
+    const apiKey = this.config.videoNotifier?.youtube?.youtubeApiKey;
+
+    this.logger.debug(`Looking up channel ID for ${cleanUsername}`);
+
+    if (apiKey) {
+      try {
+        const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(cleanUsername)}&type=channel&maxResults=1&key=${apiKey}`;
+        const response = await fetch(url);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.items && data.items.length > 0) {
+            const item = data.items[0];
+            return {
+              success: true,
+              channelId: item.id.channelId,
+              channelName: item.snippet.title,
+              thumbnail: item.snippet.thumbnails?.default?.url
+            };
+          }
+        }
+      } catch (error) {
+        this.logger.error(`Error looking up channel ID via API: ${error.message}`);
+      }
+    }
+
+    // Fallback or no API key: Scrape webpage
+    try {
+      const url = `https://www.youtube.com/${cleanUsername}`;
+      const response = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        }
+      });
+
+      if (!response.ok) {
+        return { success: false, message: `Could not find YouTube channel: ${cleanUsername}` };
+      }
+
+      const html = await response.text();
+      // Look for channelId in various possible places in HTML
+      const channelIdMatch = html.match(/"channelId":"(UC[a-zA-Z0-9_-]{22})"/);
+      const ogUrlMatch = html.match(/<meta property="og:url" content="https:\/\/www\.youtube\.com\/channel\/(UC[a-zA-Z0-9_-]{22})">/);
+      const rssUrlMatch = html.match(/https:\/\/www\.youtube\.com\/feeds\/videos\.xml\?channel_id=(UC[a-zA-Z0-9_-]{22})/);
+      
+      const channelId = channelIdMatch?.[1] || ogUrlMatch?.[1] || rssUrlMatch?.[1];
+
+      if (channelId) {
+        // Also try to find channel name
+        const nameMatch = html.match(/<meta property="og:title" content="([^"]+)">/);
+        const channelName = nameMatch?.[1] || cleanUsername;
+
+        return {
+          success: true,
+          channelId,
+          channelName
+        };
+      }
+
+      return { success: false, message: `Could not extract Channel ID for ${cleanUsername}. Please provide the Channel ID manually.` };
+    } catch (error) {
+      this.logger.error(`Error looking up channel ID via scraping: ${error.message}`);
+      return { success: false, message: `Error looking up channel: ${error.message}` };
+    }
+  }
+
   validateYouTubeChannelId(channelId) {
     if (!channelId) return false;
     // YouTube channel IDs start with UC followed by 22 characters (total 24)
