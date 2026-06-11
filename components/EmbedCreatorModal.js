@@ -13,8 +13,23 @@ async function updatePreview(interaction) {
     separatorList = `\n**Separators after indices:** ${state.v2.separators.join(', ')}`;
   }
 
+  let labelList = '';
+  if (state.v2.labels && state.v2.labels.length > 0) {
+    labelList = `\n**Labels:** ${state.v2.labels.join(', ')}`;
+  }
+
+  let galleryInfo = '';
+  if (state.v2.mediaGallery && state.v2.mediaGallery.length > 0) {
+    galleryInfo = `\n**Gallery Items:** ${state.v2.mediaGallery.length}`;
+  }
+
+  let thumbnailInfo = '';
+  if (state.v2.thumbnail && state.v2.thumbnail.length > 0) {
+    thumbnailInfo = `\n**Thumbnail:** ✅ Set`;
+  }
+
   await interaction.update({
-    content: `### Embed Creator\nYou are creating a message for ${targetChannel || 'unknown channel'}.\nUse the buttons below to customize your message.${separatorList}`,
+    content: `### Embed Creator\nYou are creating a message for ${targetChannel || 'unknown channel'}.\nUse the buttons below to customize your message.${separatorList}${labelList}${galleryInfo}${thumbnailInfo}`,
     ...message
   });
 }
@@ -126,6 +141,51 @@ const modals = [
       const customId = interaction.fields.getTextInputValue('button_id');
       
       interaction.client.embedCreatorManager.addButton(interaction.user.id, { label, customId: customId || undefined });
+      await updatePreview(interaction);
+    }
+  },
+  {
+    customId: 'embed_creator_modal_v2_label',
+    async execute(interaction) {
+      const content = interaction.fields.getTextInputValue('label_input');
+      if (!content || !content.trim()) {
+        return interaction.reply({ content: 'Label text cannot be empty.', ephemeral: true });
+      }
+      interaction.client.embedCreatorManager.addLabel(interaction.user.id, content.trim());
+      await updatePreview(interaction);
+    }
+  },
+  {
+    customId: 'embed_creator_modal_v2_thumbnail',
+    async execute(interaction) {
+      const url = interaction.fields.getTextInputValue('thumbnail_input');
+      if (url && url.trim()) {
+        const trimmed = url.trim();
+        // Basic URL validation
+        if (!/^https?:\/\/.+/.test(trimmed)) {
+          return interaction.reply({ content: 'Please enter a valid URL (starting with http:// or https://).', ephemeral: true });
+        }
+        interaction.client.embedCreatorManager.setV2Thumbnail(interaction.user.id, trimmed);
+      } else {
+        // Empty input clears the thumbnail
+        interaction.client.embedCreatorManager.setV2Thumbnail(interaction.user.id, '');
+      }
+      await updatePreview(interaction);
+    }
+  },
+  {
+    customId: 'embed_creator_modal_v2_mediagallery',
+    async execute(interaction) {
+      const url = interaction.fields.getTextInputValue('gallery_input');
+      if (!url || !url.trim()) {
+        return interaction.reply({ content: 'Please enter a URL for the gallery item.', ephemeral: true });
+      }
+      const trimmed = url.trim();
+      // Basic URL validation
+      if (!/^https?:\/\/.+/.test(trimmed)) {
+        return interaction.reply({ content: 'Please enter a valid URL (starting with http:// or https://).', ephemeral: true });
+      }
+      interaction.client.embedCreatorManager.addMediaGalleryItem(interaction.user.id, trimmed);
       await updatePreview(interaction);
     }
   }

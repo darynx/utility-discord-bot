@@ -14,8 +14,23 @@ async function updatePreview(interaction) {
     separatorList = `\n**Separators after indices:** ${state.v2.separators.join(', ')}`;
   }
 
+  let labelList = '';
+  if (state.v2.labels && state.v2.labels.length > 0) {
+    labelList = `\n**Labels:** ${state.v2.labels.join(', ')}`;
+  }
+
+  let galleryInfo = '';
+  if (state.v2.mediaGallery && state.v2.mediaGallery.length > 0) {
+    galleryInfo = `\n**Gallery Items:** ${state.v2.mediaGallery.length}`;
+  }
+
+  let thumbnailInfo = '';
+  if (state.v2.thumbnail && state.v2.thumbnail.length > 0) {
+    thumbnailInfo = `\n**Thumbnail:** ✅ Set`;
+  }
+
   await interaction.update({
-    content: `### Embed Creator\nYou are creating a message for ${targetChannel || 'unknown channel'}.\nUse the buttons below to customize your message.${separatorList}`,
+    content: `### Embed Creator\nYou are creating a message for ${targetChannel || 'unknown channel'}.\nUse the buttons below to customize your message.${separatorList}${labelList}${galleryInfo}${thumbnailInfo}`,
     ...message
   });
 }
@@ -190,6 +205,64 @@ const buttons = [
         new ActionRowBuilder().addComponents(labelInput),
         new ActionRowBuilder().addComponents(idInput)
       );
+      await interaction.showModal(modal);
+    }
+  },
+  {
+    customId: 'embed_creator_v2_label_add',
+    async execute(interaction) {
+      const state = interaction.client.embedCreatorManager.getOrCreateState(interaction.user.id);
+      const modal = new ModalBuilder()
+        .setCustomId('embed_creator_modal_v2_label')
+        .setTitle('Add Label');
+
+      const input = new TextInputBuilder()
+        .setCustomId('label_input')
+        .setLabel('Label Text')
+        .setStyle(TextInputStyle.Short)
+        .setRequired(true)
+        .setPlaceholder('e.g., NEW, BETA, INFO');
+
+      modal.addComponents(new ActionRowBuilder().addComponents(input));
+      await interaction.showModal(modal);
+    }
+  },
+  {
+    customId: 'embed_creator_v2_thumbnail',
+    async execute(interaction) {
+      const state = interaction.client.embedCreatorManager.getOrCreateState(interaction.user.id);
+      const modal = new ModalBuilder()
+        .setCustomId('embed_creator_modal_v2_thumbnail')
+        .setTitle('Set V2 Thumbnail');
+
+      const input = new TextInputBuilder()
+        .setCustomId('thumbnail_input')
+        .setLabel('Image URL')
+        .setStyle(TextInputStyle.Short)
+        .setRequired(false)
+        .setPlaceholder('https://example.com/image.png')
+        .setValue(state.v2.thumbnail || '');
+
+      modal.addComponents(new ActionRowBuilder().addComponents(input));
+      await interaction.showModal(modal);
+    }
+  },
+  {
+    customId: 'embed_creator_v2_mediagallery',
+    async execute(interaction) {
+      const state = interaction.client.embedCreatorManager.getOrCreateState(interaction.user.id);
+      const modal = new ModalBuilder()
+        .setCustomId('embed_creator_modal_v2_mediagallery')
+        .setTitle('Add Media Gallery Item');
+
+      const input = new TextInputBuilder()
+        .setCustomId('gallery_input')
+        .setLabel('Image/Video URL')
+        .setStyle(TextInputStyle.Short)
+        .setRequired(true)
+        .setPlaceholder('https://example.com/image.png');
+
+      modal.addComponents(new ActionRowBuilder().addComponents(input));
       await interaction.showModal(modal);
     }
   },

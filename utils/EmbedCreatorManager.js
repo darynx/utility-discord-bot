@@ -30,7 +30,10 @@ export class EmbedCreatorManager {
         v2: {
           textDisplays: [],
           buttons: [],
-          separators: []
+          separators: [],
+          labels: [],
+          thumbnail: '',
+          mediaGallery: []
         },
         previewMessageId: null
       });
@@ -111,6 +114,47 @@ export class EmbedCreatorManager {
     return state;
   }
 
+  addLabel(userId, content) {
+    const state = this.getOrCreateState(userId);
+    state.v2.labels.push(content);
+    return state;
+  }
+
+  removeLabel(userId, index) {
+    const state = this.getOrCreateState(userId);
+    if (index === undefined) {
+      state.v2.labels.pop();
+    } else {
+      state.v2.labels.splice(index, 1);
+    }
+    return state;
+  }
+
+  setV2Thumbnail(userId, url) {
+    const state = this.getOrCreateState(userId);
+    state.v2.thumbnail = url || '';
+    return state;
+  }
+
+  addMediaGalleryItem(userId, url) {
+    const state = this.getOrCreateState(userId);
+    if (!state.v2.mediaGallery) state.v2.mediaGallery = [];
+    if (url && url.trim()) {
+      state.v2.mediaGallery.push({ src: url.trim() });
+    }
+    return state;
+  }
+
+  removeMediaGalleryItem(userId, index) {
+    const state = this.getOrCreateState(userId);
+    if (index === undefined) {
+      state.v2.mediaGallery.pop();
+    } else {
+      state.v2.mediaGallery.splice(index, 1);
+    }
+    return state;
+  }
+
   resetState(userId) {
     const state = this.states.get(userId);
     if (state) {
@@ -177,6 +221,9 @@ export class EmbedCreatorManager {
     if (style === 'v2') {
       message = ComponentBuilder.buildV2Message({
         textDisplays: state.v2.textDisplays.length > 0 ? state.v2.textDisplays : ['*(No Content)*'],
+        labels: state.v2.labels || [],
+        thumbnail: state.v2.thumbnail || null,
+        mediaGallery: state.v2.mediaGallery && state.v2.mediaGallery.length > 0 ? state.v2.mediaGallery : null,
         buttons: state.v2.buttons.map(b => ComponentBuilder.createButton({
           label: b.label,
           customId: b.customId || `v2_btn_${Math.random().toString(36).substr(2, 9)}`,
@@ -204,6 +251,10 @@ export class EmbedCreatorManager {
   createComponents(style = 'embed', state = null) {
     if (style === 'v2') {
       const sepCount = state?.v2?.separators?.length || 0;
+      const labelCount = state?.v2?.labels?.length || 0;
+      const mediaCount = state?.v2?.mediaGallery?.length || 0;
+      const hasThumbnail = state?.v2?.thumbnail && state.v2.thumbnail.length > 0;
+
       const row1 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId('embed_creator_textdisplay_add').setLabel('Add Text').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId('embed_creator_textdisplay_remove').setLabel('Remove Last').setStyle(ButtonStyle.Secondary),
@@ -213,12 +264,18 @@ export class EmbedCreatorManager {
       );
 
       const row2 = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('embed_creator_v2_label_add').setLabel(`Labels (${labelCount})`).setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId('embed_creator_v2_thumbnail').setLabel(hasThumbnail ? 'Thumbnail ✓' : 'Thumbnail').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId('embed_creator_v2_mediagallery').setLabel(`Gallery (${mediaCount})`).setStyle(ButtonStyle.Secondary)
+      );
+
+      const row3 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId('embed_creator_send').setLabel('Send Message').setStyle(ButtonStyle.Success),
         new ButtonBuilder().setCustomId('embed_creator_reset').setLabel('Reset').setStyle(ButtonStyle.Danger),
         new ButtonBuilder().setCustomId('embed_creator_cancel').setLabel('Cancel').setStyle(ButtonStyle.Danger)
       );
 
-      return [row1, row2];
+      return [row1, row2, row3];
     }
 
     const row1 = new ActionRowBuilder().addComponents(

@@ -20,14 +20,14 @@ To use v2 components, the message payload must include the `flags` field set to 
 | 8 | ChannelSelect | 8 | A select menu for channels. |
 | 9 | Section | 9 | A logical section within a container to group components. |
 | 10 | TextDisplay | 10 | A component for displaying text with support for markdown. |
-| 11 | Thumbnail | 11 | A small image displayed in the corner of a component. |
-| 12 | MediaGallery | 12 | A gallery of images or videos. |
 | 13 | File | 13 | A downloadable file attachment. |
 | 14 | Separator | 14 | A horizontal line separator used to divide content. |
 | 15 | Form | 15 | A structured form within a component. |
 | 16 | Inputs | 16 | A group of input fields. |
 | 17 | Container | 17 | The top-level component that wraps all other layout components. Supports an accent color. |
 | 18 | Label | 18 | A small text label, often used for categorization or status. |
+| 24 | Thumbnail | 24 | A small image displayed within a component (v2). |
+| 25 | MediaGallery | 25 | A gallery of images or videos (v2). |
 
 ## DiscordApiHelper
 
@@ -82,6 +82,18 @@ const container = ComponentBuilder.createContainer({
 });
 ```
 
+### Labels
+Labels are small text indicators useful for showing status or category (Type 18).
+```javascript
+const container = ComponentBuilder.createContainer({
+  components: [
+    ComponentBuilder.createTextDisplay('Server Status'),
+    ComponentBuilder.createLabel('ONLINE'),
+    ComponentBuilder.createLabel('BETA')
+  ]
+});
+```
+
 ### Buttons in ActionRow
 Buttons must still be wrapped in an `ActionRow`.
 ```javascript
@@ -98,7 +110,51 @@ const container = ComponentBuilder.createContainer({
 });
 ```
 
-### Full "Embed-Like" Message Example
+## Media Components
+
+V2 introduces dedicated media components that can be embedded directly within a Container.
+
+### Thumbnail (Type 24)
+The Thumbnail component displays a small image within a v2 message. Unlike the embed `thumbnail` field, this is a layout component that appears inline with other components.
+
+```javascript
+const thumbnail = ComponentBuilder.createThumbnail({
+  src: 'https://example.com/image.png',
+  size: 64 // Optional: specify size in pixels
+});
+```
+
+### MediaGallery (Type 25)
+The MediaGallery component displays a collection of images or videos in a gallery layout.
+
+```javascript
+const gallery = ComponentBuilder.createMediaGallery({
+  items: [
+    { src: 'https://example.com/image1.png' },
+    { src: 'https://example.com/image2.png' }
+  ]
+});
+```
+
+### Full Example with Media Components
+```javascript
+const payload = ComponentBuilder.buildV2Message({
+  titleTextDisplay: 'Media Showcase',
+  textDisplays: [
+    'Check out these images!'
+  ],
+  labels: ['GALLERY', 'FEATURED'],
+  thumbnail: 'https://example.com/thumbnail.png',
+  mediaGallery: [
+    { src: 'https://example.com/photo1.png' },
+    { src: 'https://example.com/photo2.png' }
+  ],
+  separator: true,
+  accentColor: 0x5865F2
+});
+```
+
+## Full "Embed-Like" Message Example
 ```javascript
 const payload = ComponentBuilder.buildV2Message({
   titleTextDisplay: 'Server Status',
@@ -107,6 +163,7 @@ const payload = ComponentBuilder.buildV2Message({
     'Players: 10/100',
     'Uptime: 24h'
   ],
+  labels: ['ACTIVE', 'BETA'],
   separator: [0, 2], // Separator after 1st and 3rd text display
   buttons: [
     { customId: 'refresh', label: 'Refresh', style: 1 }
@@ -119,7 +176,7 @@ const payload = ComponentBuilder.buildV2Message({
 
 1. **No Embeds**: You cannot use `embeds` in the same message as v2 components.
 2. **No Content Field (usually)**: When using v2 components, the top-level `content` field is often restricted or should be left null if you want the container to be the primary focus.
-3. **Container required**: v2 layout components (TextDisplay, Section, etc.) MUST be inside a `Container` (Type 17).
+3. **Container required**: v2 layout components (TextDisplay, Section, Label, Thumbnail, MediaGallery, etc.) MUST be inside a `Container` (Type 17).
 4. **Flag required**: Don't forget `flags: 32768`.
 
 ## Troubleshooting
