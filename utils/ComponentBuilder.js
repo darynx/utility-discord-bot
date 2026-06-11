@@ -8,10 +8,16 @@ export const ComponentType = {
   RoleSelect: 6,
   MentionableSelect: 7,
   ChannelSelect: 8,
+  Section: 9,
   TextDisplay: 10,
+  Thumbnail: 11,
+  MediaGallery: 12,
+  File: 13,
   Separator: 14,
+  Form: 15,
+  Inputs: 16,
   Container: 17,
-  Section: 18,
+  Label: 18,
 };
 
 export class ComponentBuilder {
@@ -37,6 +43,13 @@ export class ComponentBuilder {
   static createTextDisplay(content) {
     return {
       type: ComponentType.TextDisplay,
+      content: content,
+    };
+  }
+
+  static createLabel(content) {
+    return {
+      type: ComponentType.Label,
       content: content,
     };
   }

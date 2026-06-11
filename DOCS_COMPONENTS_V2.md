@@ -18,10 +18,16 @@ To use v2 components, the message payload must include the `flags` field set to 
 | 6 | RoleSelect | 6 | A select menu for roles. |
 | 7 | MentionableSelect | 7 | A select menu for users and roles. |
 | 8 | ChannelSelect | 8 | A select menu for channels. |
+| 9 | Section | 9 | A logical section within a container to group components. |
 | 10 | TextDisplay | 10 | A component for displaying text with support for markdown. |
+| 11 | Thumbnail | 11 | A small image displayed in the corner of a component. |
+| 12 | MediaGallery | 12 | A gallery of images or videos. |
+| 13 | File | 13 | A downloadable file attachment. |
 | 14 | Separator | 14 | A horizontal line separator used to divide content. |
+| 15 | Form | 15 | A structured form within a component. |
+| 16 | Inputs | 16 | A group of input fields. |
 | 17 | Container | 17 | The top-level component that wraps all other layout components. Supports an accent color. |
-| 18 | Section | 18 | A logical section within a container to group components. |
+| 18 | Label | 18 | A small text label, often used for categorization or status. |
 
 ## DiscordApiHelper
 
